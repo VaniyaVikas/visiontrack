@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VisionTrack AI</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+<nav class="navbar border-bottom mb-4"><div class="container-xl">
+  <span class="navbar-brand fw-bold">&#9673; VisionTrack <span class="text-info">AI</span></span>
+  <span class="text-secondary small">Real-time detection &amp; tracking &middot; YOLO + ByteTrack/BoT-SORT</span>
+</div></nav>
+
+<main class="container-xl pb-5">
+  <div id="alert" class="alert alert-danger d-none" role="alert"></div>
+
+  <ul class="nav nav-pills mb-3" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-live">Webcam</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-video">Video upload</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-bench">Benchmark</button></li>
+  </ul>
+
+  <div class="tab-content mb-4">
+    <!-- LIVE -->
+    <div class="tab-pane fade show active" id="tab-live"><div class="row g-3">
+      <div class="col-lg-4"><div class="card p-3 h-100">
+        <h6>Settings</h6>
+        <div data-prefix="live" class="params"></div>
+        <label class="form-label small mt-2">Camera index</label>
+        <input id="live-camera_index" type="number" class="form-control form-control-sm" value="0" min="0" max="10">
+        <div class="d-grid gap-2 mt-3">
+          <button id="live-start" class="btn btn-success">Start webcam</button>
+          <button id="live-stop" class="btn btn-outline-danger" disabled>Stop</button>
+        </div>
+        <p class="small text-secondary mt-3 mb-0">
+          <b>Webcam note:</b> the camera is opened by the machine running this server (OpenCV), so it works
+          when you run VisionTrack locally. A remote/cloud deployment cannot access your browser's camera.
+          Make sure no other app is using the camera and the OS grants camera permission to Python.
+        </p>
+      </div></div>
+      <div class="col-lg-8"><div class="card p-2 h-100 stage">
+        <div id="live-placeholder" class="text-secondary text-center">Live feed appears here after you press <b>Start</b>.</div>
+        <img id="live-feed" class="img-fluid d-none" alt="Live detection feed">
+        <div id="live-meta" class="small text-secondary mt-2"></div>
+      </div></div>
+    </div></div>
+
+    <!-- VIDEO -->
+    <div class="tab-pane fade" id="tab-video"><div class="row g-3">
+      <div class="col-lg-4"><div class="card p-3 h-100">
+        <h6>Upload &amp; process</h6>
+        <input id="video-file" type="file" class="form-control form-control-sm mb-2" accept="video/*">
+        <div class="small text-secondary mb-2" id="video-limits"></div>
+        <div data-prefix="video" class="params"></div>
+        <div class="d-grid mt-3"><button id="video-start" class="btn btn-primary">Process video</button></div>
+        <div class="progress mt-3 d-none" id="video-progress-wrap"><div id="video-progress" class="progress-bar" style="width:0%">0%</div></div>
+        <div id="video-status" class="small mt-2 text-secondary"></div>
+        <div id="video-downloads" class="d-flex flex-wrap gap-2 mt-2"></div>
+      </div></div>
+      <div class="col-lg-8"><div class="card p-2 h-100 stage">
+        <div id="video-placeholder" class="text-secondary text-center">The annotated video preview appears here when processing finishes.</div>
+        <video id="video-player" class="w-100 d-none" controls></video>
+      </div></div>
+    </div></div>
+
+    <!-- BENCHMARK -->
+    <div class="tab-pane fade" id="tab-bench"><div class="row g-3">
+      <div class="col-lg-4"><div class="card p-3 h-100">
+        <h6>Model benchmark</h6>
+        <p class="small text-secondary">Runs each selected model on the same frames of your video (3 warm-up frames discarded) and reports measured speed on <i>this</i> hardware.</p>
+        <input id="bench-file" type="file" class="form-control form-control-sm mb-2" accept="video/*">
+        <div id="bench-models" class="mb-2"></div>
+        <label class="form-label small">Frames per model</label>
+        <input id="bench-frames" type="number" class="form-control form-control-sm" value="100" min="10" max="300">
+        <div class="d-grid mt-3"><button id="bench-start" class="btn btn-warning">Run benchmark</button></div>
+        <div class="progress mt-3 d-none" id="bench-progress-wrap"><div id="bench-progress" class="progress-bar bg-warning" style="width:0%">0%</div></div>
+        <div id="bench-status" class="small mt-2 text-secondary"></div>
+      </div></div>
+      <div class="col-lg-8"><div class="card p-3 h-100">
+        <div id="bench-empty" class="text-secondary text-center my-5">No benchmark results yet. Upload a video and run a benchmark.</div>
+        <div id="bench-results" class="d-none">
+          <div class="chart-box"><canvas id="chart-bench"></canvas></div>
+          <div class="table-responsive mt-3"><table class="table table-sm small mb-0">
+            <thead><tr><th>Model</th><th>Frames</th><th>Avg inference (ms)</th><th>Inference FPS</th><th>End-to-end FPS</th><th>Device</th></tr></thead>
+            <tbody id="bench-table"></tbody></table></div>
+        </div>
+      </div></div>
+    </div></div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <h5 class="mb-1">Analytics <span id="dash-source" class="badge text-bg-secondary ms-2">no data</span></h5>
+  <p class="small text-secondary">
+    <b>Detections</b> = boxes drawn across all frames &middot; <b>Currently visible</b> = objects in the latest frame &middot;
+    <b>Unique track IDs</b> = distinct IDs the tracker issued (IDs can change after long occlusions or resets, so this is not a guaranteed headcount).
+  </p>
+  <div class="row g-3 mb-3" id="cards"></div>
+  <div class="row g-3">
+    <div class="col-lg-8"><div class="card p-3"><h6>Detection frequency over time</h6>
+      <div class="chart-box"><canvas id="chart-timeline"></canvas><div class="empty" id="empty-timeline">No data yet</div></div></div></div>
+    <div class="col-lg-4"><div class="card p-3"><h6>Class distribution</h6>
+      <div class="chart-box"><canvas id="chart-classes"></canvas><div class="empty" id="empty-classes">No data yet</div></div></div></div>
+  </div>
+  <div class="text-end mt-3" id="report-links"></div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

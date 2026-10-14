@@ -1,0 +1,10 @@
+services:
+  visiontrack:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      MAX_UPLOAD_MB: "200"
+    volumes:
+      - ./instance:/app/instance
+      - ./weights:/app/weights
+  
